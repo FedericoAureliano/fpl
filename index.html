@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FPL Playoff Bracket</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --fpl-purple: #37003c;
+      --fpl-green: #00ff87;
+      --fpl-cyan: #05f0ff;
+      --paper: #faf7fb;
+      --line: #e7dfee;
+      --text: #2a1230;
+      --muted: #705d76;
+      --selected: #f0fff8;
+      --placeholder: #f6f2f8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      color: var(--text);
+      background: var(--paper);
+    }
+
+    main {
+      width: min(920px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 1rem 0 1.5rem;
+    }
+
+    .bracket {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 18rem));
+      gap: 0.8rem;
+      align-items: start;
+      justify-content: center;
+    }
+
+    .round {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .round-label {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .match {
+      border-top: 1px solid var(--line);
+      padding-top: 0.55rem;
+      width: min(100%, 18rem);
+      justify-self: start;
+    }
+
+    .matchup {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .team-option {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 0.7rem;
+      background: #fff;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .team-option.selected {
+      border-color: var(--fpl-green);
+      background: var(--selected);
+    }
+
+    .team-option.loser {
+      border-color: #ddd5e4;
+      background: #f4f1f6;
+    }
+
+    .team-option.loser .seed,
+    .team-option.loser .name,
+    .team-option.loser .meta,
+    .team-option.loser .odds {
+      color: #9a90a0;
+    }
+
+    .team-option.underdog .odds {
+      color: #9a90a0;
+    }
+
+    .team-row {
+      width: 100%;
+      border: 0;
+      padding: 0.5rem 0.65rem;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      display: grid;
+      grid-template-columns: 1.75rem minmax(0, 1fr);
+      gap: 0.55rem;
+      align-items: start;
+    }
+
+    .team-row:focus-visible,
+    .name:focus-visible {
+      outline: 2px solid var(--fpl-cyan);
+      outline-offset: 2px;
+      border-radius: 0.35rem;
+    }
+
+    .seed {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .copy {
+      min-width: 0;
+    }
+
+    .title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.3rem;
+    }
+
+    .name {
+      color: var(--fpl-purple);
+      text-decoration: none;
+      font-size: 0.94rem;
+      font-weight: 600;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    .name:hover {
+      text-decoration: underline;
+    }
+
+    .meta,
+    .odds {
+      display: inline;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .odds {
+      color: #0c7a56;
+      font-size: 0.74rem;
+      margin-left: 0.35rem;
+    }
+
+    .team-option.selected .odds {
+      color: #0c7a56;
+      font-weight: 700;
+    }
+
+    .crown {
+      position: absolute;
+      top: 0.18rem;
+      right: 0.28rem;
+      color: #b78103;
+      font-size: 1.3rem;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .placeholder {
+      border: 1px dashed var(--line);
+      border-radius: 0.7rem;
+      padding: 0.75rem;
+      background: var(--placeholder);
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 920px) {
+      main {
+        width: min(42rem, calc(100% - 1.75rem));
+        padding: 1rem 0 1.5rem;
+      }
+
+      .bracket {
+        grid-template-columns: 1fr;
+        gap: 1.75rem;
+      }
+
+      .match,
+      .round[data-round="quarterfinals"] .match,
+      .round[data-round="semifinals"] .match,
+      .round[data-round="final"] .match {
+        width: 100%;
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="bracket" id="bracket" aria-label="Playoff bracket"></div>
+  </main>
+
+  <script>
+    const teams = [
+      {
+        id: 5448818,
+        rank: 1,
+        name: "Ici C’est Paris!",
+        points: 1928,
+        href: "https://fantasy.premierleague.com/entry/5448818/history"
+      },
+      {
+        id: 6300116,
+        rank: 2,
+        name: "Atlético Rebecca",
+        points: 1881,
+        href: "https://fantasy.premierleague.com/entry/6300116/history"
+      },
+      {
+        id: 4559617,
+        rank: 3,
+        name: "Lasso's lads",
+        points: 1907,
+        href: "https://fantasy.premierleague.com/entry/4559617/history"
+      },
+      {
+        id: 5416244,
+        rank: 4,
+        name: "CRISPR FC",
+        points: 1890,
+        href: "https://fantasy.premierleague.com/entry/5416244/history"
+      },
+      {
+        id: 2915887,
+        rank: 5,
+        name: "Sub-Zero",
+        points: 1880,
+        href: "https://fantasy.premierleague.com/entry/2915887/history"
+      },
+      {
+        id: 4458706,
+        rank: 6,
+        name: "Lucho",
+        points: 1801,
+        href: "https://fantasy.premierleague.com/entry/4458706/history"
+      },
+      {
+        id: 5435233,
+        rank: 7,
+        name: "Aseda FC",
+        points: 1755,
+        href: "https://fantasy.premierleague.com/entry/5435233/history"
+      },
+      {
+        id: 8215193,
+        rank: 8,
+        name: "Son-day Scaries",
+        points: 1608,
+        href: "https://fantasy.premierleague.com/entry/8215193/history"
+      }
+    ];
+
+    const bracketEl = document.getElementById("bracket");
+    const teamByRank = new Map(teams.map((team) => [team.rank, team]));
+    const state = {
+      quarterfinals: [null, null, null, null],
+      semifinals: [null, null],
+      final: null
+    };
+
+    const roundMeta = [
+      { key: "quarterfinals", label: "Quarterfinals", matches: 4 },
+      { key: "semifinals", label: "Semifinals", matches: 2 },
+      { key: "final", label: "Final", matches: 1 }
+    ];
+
+    function participantsFor(round, matchIndex) {
+      if (round === "quarterfinals") {
+        return [
+          [1, 8],
+          [4, 5],
+          [2, 7],
+          [3, 6]
+        ][matchIndex].map((rank) => teamByRank.get(rank));
+      }
+
+      if (round === "semifinals") {
+        return [winnerFor("quarterfinals", matchIndex * 2), winnerFor("quarterfinals", matchIndex * 2 + 1)];
+      }
+
+      return [winnerFor("semifinals", 0), winnerFor("semifinals", 1)];
+    }
+
+    function winnerFor(round, matchIndex) {
+      const participants = participantsFor(round, matchIndex);
+      const pickedId = round === "final" ? state.final : state[round][matchIndex];
+      return participants.find((team) => team && team.id === pickedId) || null;
+    }
+
+    function oddsFor(team, opponent) {
+      const weighting = 6;
+      const teamStrength = team.points ** weighting;
+      const opponentStrength = opponent.points ** weighting;
+      const probability = teamStrength / (teamStrength + opponentStrength);
+
+      return {
+        probability,
+        percentage: `${Math.round(probability * 100)}% win chance`
+      };
+    }
+
+    function togglePick(round, matchIndex, teamId) {
+      if (round === "final") {
+        state.final = state.final === teamId ? null : teamId;
+        render();
+        return;
+      }
+
+      state[round][matchIndex] = state[round][matchIndex] === teamId ? null : teamId;
+
+      if (round === "quarterfinals") {
+        state.semifinals[Math.floor(matchIndex / 2)] = null;
+      }
+
+      if (round === "quarterfinals" || round === "semifinals") {
+        state.final = null;
+      }
+
+      render();
+    }
+
+    function teamMarkup(team, opponent, round, matchIndex, selectedId) {
+      if (!team) {
+        return '<div class="placeholder">Awaiting pick</div>';
+      }
+
+      const selected = selectedId === team.id;
+      const loser = Boolean(selectedId) && !selected;
+      const odds = opponent ? oddsFor(team, opponent) : null;
+      const crowned = round === "final" && selected;
+      const underdog = !selectedId && odds && odds.probability < 0.5;
+
+      return `
+        <div class="team-option${selected ? " selected" : ""}${loser ? " loser" : ""}${underdog ? " underdog" : ""}">
+          ${crowned ? '<span class="crown" aria-hidden="true">👑</span>' : ""}
+          <button
+            type="button"
+            class="team-row"
+            aria-pressed="${selected}"
+            onclick="togglePick('${round}', ${matchIndex}, ${team.id})"
+          >
+            <span class="seed">${team.rank}</span>
+            <span class="copy">
+              <span class="title">
+                <a
+                  class="name"
+                  href="${team.href}"
+                  target="_blank"
+                  rel="noreferrer"
+                  onclick="event.stopPropagation()"
+                >${team.name}</a>
+              </span>
+              <span class="meta">Total points: ${team.points}</span>${odds ? `<span class="odds">· ${odds.percentage}</span>` : ""}
+            </span>
+          </button>
+        </div>
+      `;
+    }
+
+    function matchMarkup(round, matchIndex) {
+      const participants = participantsFor(round, matchIndex);
+      const selectedId = round === "final" ? state.final : state[round][matchIndex];
+
+      return `
+        <article class="match">
+          <div class="matchup">
+            ${teamMarkup(participants[0], participants[1], round, matchIndex, selectedId)}
+            ${teamMarkup(participants[1], participants[0], round, matchIndex, selectedId)}
+          </div>
+        </article>
+      `;
+    }
+
+    function render() {
+      bracketEl.innerHTML = roundMeta.map((round) => `
+        <section class="round" data-round="${round.key}">
+          <p class="round-label">${round.label}</p>
+          ${Array.from({ length: round.matches }, (_, matchIndex) => matchMarkup(round.key, matchIndex)).join("")}
+        </section>
+      `).join("");
+    }
+
+    window.togglePick = togglePick;
+    render();
+  </script>
+</body>
+</html>
